@@ -24,17 +24,19 @@ const CATS = {
 
 // ─── ESTADO DEL JUEGO ─────────────────────────────────────
 let sala = {
-  fase: 'lobby',       // lobby | palabras | pistas | resumen | votacion | resultado
-  jugadores: [],       // [{id, nombre, listo, palabraMostrada}]
-  asignaciones: {},    // {nombre: {esImpostor, palabraReal}}
+  fase: 'lobby',       // lobby | palabras | pistas | resumen | debate | votacion | resultado
+  jugadores: [],
+  asignaciones: {},
   categoria: '',
-  hints: {},           // {nombre: pista}
-  votes: {},           // {votante: votado}
-  wordTurno: 0,        // índice del jugador actual en reparto
+  hints: {},
+  votes: {},
+  debateVotos: {},     // {nombre: 'votar' | 'otra_ronda'}
+  wordTurno: 0,
   voteTurno: 0,
+  rondaPistas: 1,
 };
 
-const clients = new Map(); // ws -> nombre
+const clients = new Map();
 
 function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -53,16 +55,17 @@ function sendTo(nombre, data) {
 }
 
 function broadcastEstado() {
-  // Manda estado público (sin revelar asignaciones)
   broadcast({
     tipo: 'estado',
     fase: sala.fase,
     jugadores: sala.jugadores.map(j => ({ nombre: j.nombre, listo: j.listo })),
     hints: sala.hints,
     votes: sala.votes,
+    debateVotos: sala.debateVotos,
     wordTurno: sala.wordTurno,
     voteTurno: sala.voteTurno,
     categoria: sala.categoria,
+    rondaPistas: sala.rondaPistas,
   });
 }
 
@@ -75,28 +78,22 @@ function iniciarJuego() {
 
   sala.asignaciones = {};
   nombres.forEach((n, i) => {
-    sala.asignaciones[n] = {
-      esImpostor: i === impostorIdx,
-      palabraReal,
-    };
+    sala.asignaciones[n] = { esImpostor: i === impostorIdx, palabraReal };
   });
 
   sala.hints = {};
   sala.votes = {};
+  sala.debateVotos = {};
   sala.wordTurno = 0;
   sala.voteTurno = 0;
+  sala.rondaPistas = 1;
   sala.jugadores.forEach(j => { j.listo = false; j.palabraMostrada = false; });
   sala.fase = 'palabras';
   broadcastEstado();
 
-  // Mandar palabra privada a cada jugador
   nombres.forEach(n => {
     const d = sala.asignaciones[n];
-    sendTo(n, {
-      tipo: 'tuPalabra',
-      esImpostor: d.esImpostor,
-      palabraReal: d.palabraReal,
-    });
+    sendTo(n, { tipo: 'tuPalabra', esImpostor: d.esImpostor, palabraReal: d.palabraReal });
   });
 }
 
@@ -116,12 +113,34 @@ function verificarTodasPistas() {
   }
 }
 
+function verificarDebateVotos() {
+  const nombres = sala.jugadores.map(j => j.nombre);
+  if (!nombres.every(n => sala.debateVotos[n])) return; // no han votado todos
+
+  const votarYa    = nombres.filter(n => sala.debateVotos[n] === 'votar').length;
+  const otraRonda  = nombres.filter(n => sala.debateVotos[n] === 'otra_ronda').length;
+
+  if (votarYa > otraRonda) {
+    // Mayoría quiere votar
+    sala.fase = 'votacion';
+    sala.votes = {};
+    broadcastEstado();
+  } else {
+    // Mayoría quiere otra ronda de pistas
+    sala.rondaPistas += 1;
+    sala.debateVotos = {};
+    // Limpiar solo las pistas de esta ronda para que todos puedan dar una nueva
+    sala.hints = {};
+    sala.fase = 'pistas';
+    broadcastEstado();
+  }
+}
+
 function verificarTodosVotos() {
   const nombres = sala.jugadores.map(j => j.nombre);
   if (nombres.every(n => sala.votes[n])) {
     sala.fase = 'resultado';
 
-    // Calcular resultado
     const conteo = {};
     nombres.forEach(n => { conteo[n] = 0; });
     Object.values(sala.votes).forEach(v => { conteo[v] = (conteo[v] || 0) + 1; });
@@ -140,7 +159,6 @@ function verificarTodosVotos() {
       expulsados,
     });
 
-    sala.fase = 'resultado';
     broadcastEstado();
   }
 }
@@ -154,7 +172,6 @@ wss.on('connection', (ws) => {
     if (msg.tipo === 'unirse') {
       const nombre = msg.nombre?.trim().slice(0, 20);
       if (!nombre) return;
-      // Evitar duplicados
       if (sala.jugadores.find(j => j.nombre === nombre)) {
         ws.send(JSON.stringify({ tipo: 'error', texto: 'Ese nombre ya está en uso.' }));
         return;
@@ -190,8 +207,18 @@ wss.on('connection', (ws) => {
       }
     }
 
+    else if (msg.tipo === 'debateVoto') {
+      const nombre = clients.get(ws);
+      if (nombre && (msg.eleccion === 'votar' || msg.eleccion === 'otra_ronda')) {
+        sala.debateVotos[nombre] = msg.eleccion;
+        verificarDebateVotos();
+        broadcastEstado();
+      }
+    }
+
     else if (msg.tipo === 'irAVotar') {
-      sala.fase = 'votacion';
+      sala.fase = 'debate';
+      sala.debateVotos = {};
       broadcastEstado();
     }
 
@@ -208,7 +235,7 @@ wss.on('connection', (ws) => {
     else if (msg.tipo === 'reiniciar') {
       sala.jugadores.forEach(j => { j.listo = false; j.palabraMostrada = false; });
       sala.fase = 'lobby';
-      sala.hints = {}; sala.votes = {}; sala.asignaciones = {};
+      sala.hints = {}; sala.votes = {}; sala.asignaciones = {}; sala.debateVotos = {};
       broadcastEstado();
     }
   });
