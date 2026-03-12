@@ -198,7 +198,31 @@
     <div class="step-title">Pistas de todos</div>
     <div class="card">
       <div id="resumen-lista"></div>
-      <button class="btn btn-primary" style="margin-top:10px;" onclick="irAVotar()">VOTAR →</button>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="irAVotar()">¿VOTAR O NUEVA RONDA? →</button>
+    </div>
+  </div>
+
+  <!-- ══ DEBATE: ¿VOTAR O NUEVA RONDA? ══ -->
+  <div class="screen" id="s-debate">
+    <div class="step-label">Decisión grupal</div>
+    <div class="step-title" id="debate-titulo">¿Listos para votar?</div>
+    <div class="card">
+      <p style="color:var(--muted);font-size:.88rem;margin-bottom:18px;" id="debate-desc">
+        Voten si quieren pasar a la votación o dar otra ronda de pistas. La mayoría decide.
+      </p>
+      <div id="debate-mi-voto">
+        <button class="btn btn-primary" onclick="votarDebate('votar')" id="btn-debate-votar">
+          🗳️ YA PODEMOS VOTAR
+        </button>
+        <button class="btn btn-secondary" onclick="votarDebate('otra_ronda')" id="btn-debate-ronda">
+          💬 QUIERO OTRA RONDA DE PISTAS
+        </button>
+      </div>
+      <div id="debate-enviado" style="display:none" class="waiting-msg">
+        Tu voto fue registrado, esperando a los demás<span class="dot-anim"></span>
+      </div>
+      <div class="section-title" style="margin-top:18px;">Votos en tiempo real</div>
+      <div id="debate-progreso"></div>
     </div>
   </div>
 
@@ -324,6 +348,16 @@ function enviarPista() {
 
 function irAVotar() { send({ tipo: 'irAVotar' }); }
 
+let debateVotado = false;
+
+function votarDebate(eleccion) {
+  if (debateVotado) return;
+  debateVotado = true;
+  document.getElementById('debate-mi-voto').style.display = 'none';
+  document.getElementById('debate-enviado').style.display = 'block';
+  send({ tipo: 'debateVoto', eleccion });
+}
+
 function seleccionarVoto(nombre) {
   if (votoEnviado) return;
   selectedVote = nombre;
@@ -355,15 +389,15 @@ function recibirPalabra(msg) {
 // ─── MANEJAR ESTADO ────────────────────────────────────────
 function manejarEstado(estado) {
   estadoActual = estado;
-  const { fase, jugadores, hints, votes } = estado;
+  const { fase, jugadores, hints, votes, debateVotos, rondaPistas } = estado;
 
   if (fase === 'lobby') {
-    pistaEnviada = false; votoEnviado = false; selectedVote = null;
+    pistaEnviada = false; votoEnviado = false; selectedVote = null; debateVotado = false;
     renderLobby(jugadores);
     show('s-lobby');
   }
   else if (fase === 'palabras') {
-    renderLobby(jugadores); // actualiza progreso
+    renderLobby(jugadores);
     if (!palabraVistaBool && miPalabra) {
       show('s-palabra');
     } else if (palabraVistaBool) {
@@ -371,12 +405,25 @@ function manejarEstado(estado) {
     }
   }
   else if (fase === 'pistas') {
+    // Si volvemos a pistas por nueva ronda, resetear estado local
+    if (pistaEnviada && !hints[miNombre]) {
+      pistaEnviada = false;
+      document.getElementById('inp-pista').disabled = false;
+      document.getElementById('inp-pista').value = '';
+      document.querySelector('#s-pistas .btn').disabled = false;
+    }
+    document.querySelector('#s-pistas .step-title').textContent =
+      rondaPistas > 1 ? `Ronda ${rondaPistas} de pistas` : 'Da tu pista';
     renderProgresoPistas(jugadores, hints);
     show('s-pistas');
   }
   else if (fase === 'resumen') {
     renderResumen(jugadores, hints);
     show('s-resumen');
+  }
+  else if (fase === 'debate') {
+    renderDebate(jugadores, debateVotos);
+    show('s-debate');
   }
   else if (fase === 'votacion') {
     if (!votoEnviado) renderVotacion(jugadores, votes);
@@ -385,6 +432,34 @@ function manejarEstado(estado) {
   else if (fase === 'resultado') {
     // resultado se maneja por mensaje separado
   }
+}
+
+// ─── RENDER DEBATE ─────────────────────────────────────────
+function renderDebate(jugadores, debateVotos) {
+  const total = jugadores.length;
+  const votarYa   = jugadores.filter(j => debateVotos[j.nombre] === 'votar').length;
+  const otraRonda = jugadores.filter(j => debateVotos[j.nombre] === 'otra_ronda').length;
+  const falta = total - votarYa - otraRonda;
+
+  document.getElementById('debate-progreso').innerHTML = jugadores.map((j, i) => {
+    const v = debateVotos[j.nombre];
+    const etiqueta = v === 'votar' ? '🗳️ Votar ya' : v === 'otra_ronda' ? '💬 Otra ronda' : '…';
+    const color = v === 'votar' ? 'var(--accent)' : v === 'otra_ronda' ? 'var(--success)' : 'var(--muted)';
+    return `
+    <div class="hint-item">
+      <div class="avatar" style="${avatarStyle(i)}">${ini(j.nombre)}</div>
+      <div>
+        <div class="hint-name">${j.nombre}${j.nombre === miNombre ? ' (tú)' : ''}</div>
+        <div style="font-size:.82rem;color:${color}">${etiqueta}</div>
+      </div>
+      <div class="pending-dot ${v ? 'done' : ''}"></div>
+    </div>`;
+  }).join('') +
+  `<div style="text-align:center;color:var(--muted);font-size:.82rem;margin-top:10px;">
+    🗳️ Votar ya: <strong style="color:var(--accent)">${votarYa}</strong> &nbsp;|&nbsp;
+    💬 Otra ronda: <strong style="color:var(--success)">${otraRonda}</strong> &nbsp;|&nbsp;
+    Pendientes: ${falta}
+  </div>`;
 }
 
 // ─── RENDER LOBBY ──────────────────────────────────────────
