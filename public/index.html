@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Impostor</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #13131a; --card: #1a1a24; --border: #2a2a3a;
+    --accent: #e63946; --accent2: #f4a261; --text: #f0f0f5;
+    --muted: #6b6b80; --success: #2a9d8f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', sans-serif; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    background-image: radial-gradient(ellipse at 20% 50%, rgba(230,57,70,0.06) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 20%, rgba(244,162,97,0.04) 0%, transparent 50%);
+  }
+  #app { width: 100%; max-width: 520px; }
+  .screen { display: none; animation: fadeIn 0.35s ease; }
+  .screen.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+
+  .logo { font-family:'Bebas Neue',sans-serif; font-size:3.6rem; letter-spacing:.08em; line-height:1;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .logo-sub { font-size:.72rem; letter-spacing:.25em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:26px; margin-top:18px; }
+  .step-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.2em; color:var(--muted); margin-bottom:4px; }
+  .step-title { font-family:'Bebas Neue',sans-serif; font-size:2rem; letter-spacing:.08em; line-height:1.1; margin-bottom:14px; }
+
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin-bottom:6px; }
+  .field input { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:12px 16px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:1rem; outline:none; transition:border-color .2s; }
+  .field input:focus { border-color:var(--accent); }
+
+  .btn { display:block; width:100%; padding:13px; border:none; border-radius:10px;
+    font-family:'Bebas Neue',sans-serif; font-size:1.25rem; letter-spacing:.1em;
+    cursor:pointer; transition:transform .15s, opacity .15s; margin-top:10px; }
+  .btn:active { transform:scale(.97); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-primary { background:linear-gradient(135deg,var(--accent),#c1121f); color:#fff; }
+  .btn-secondary { background:var(--surface); border:1px solid var(--border); color:var(--text); }
+  .btn-success { background:linear-gradient(135deg,var(--success),#1a7a70); color:#fff; }
+
+  /* Jugadores en lobby */
+  .player-list { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
+  .player-row { display:flex; align-items:center; gap:10px; background:var(--surface);
+    border:1px solid var(--border); border-radius:10px; padding:10px 14px; }
+  .avatar { width:30px; height:30px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:.78rem; font-weight:700; flex-shrink:0; }
+  .player-name { font-size:.95rem; }
+  .badge { margin-left:auto; font-size:.7rem; padding:3px 10px; border-radius:20px; }
+  .badge-listo { background:rgba(42,157,143,.15); color:var(--success); border:1px solid rgba(42,157,143,.3); }
+  .badge-espera { background:rgba(107,107,128,.1); color:var(--muted); border:1px solid var(--border); }
+  .badge-tu { background:rgba(230,57,70,.12); color:var(--accent); border:1px solid rgba(230,57,70,.3); }
+
+  /* Palabra */
+  .word-box { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:30px; text-align:center; margin:14px 0; }
+  .word-big { font-family:'Bebas Neue',sans-serif; font-size:2.8rem; letter-spacing:.12em; }
+  .word-hint { font-size:.8rem; color:var(--muted); margin-top:8px; line-height:1.5; }
+  .cover-box { background:var(--card); border:1px dashed var(--border); border-radius:12px;
+    padding:30px; text-align:center; margin:14px 0; cursor:pointer; transition:border-color .2s; }
+  .cover-box:hover { border-color:var(--accent); }
+
+  /* Pistas */
+  .hint-item { display:flex; align-items:center; gap:12px; background:var(--surface);
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:8px; }
+  .hint-name { font-size:.75rem; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); min-width:85px; }
+  .hint-text { font-size:.95rem; }
+  .pending-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); margin-left:auto; flex-shrink:0; }
+  .pending-dot.done { background:var(--success); }
+
+  /* Votos */
+  .vote-option { display:flex; align-items:center; gap:12px; background:var(--surface);
+    border:2px solid var(--border); border-radius:10px; padding:13px 16px; margin-bottom:8px;
+    cursor:pointer; transition:border-color .2s, background .2s; font-size:.95rem; }
+  .vote-option:hover { border-color:var(--accent); }
+  .vote-option.selected { border-color:var(--accent); background:rgba(230,57,70,.08); }
+
+  /* Resultado */
+  .result-banner { border-radius:14px; padding:22px; text-align:center; margin-bottom:14px; }
+  .result-banner.win { background:rgba(42,157,143,.15); border:1px solid rgba(42,157,143,.4); }
+  .result-banner.lose { background:rgba(230,57,70,.12); border:1px solid rgba(230,57,70,.4); }
+  .result-emoji { font-size:2.8rem; }
+  .result-title { font-family:'Bebas Neue',sans-serif; font-size:1.9rem; letter-spacing:.1em; margin-top:6px; }
+  .result-sub { color:var(--muted); font-size:.88rem; margin-top:4px; }
+
+  .vote-bar-row { margin-bottom:10px; }
+  .vote-bar-header { display:flex; justify-content:space-between; font-size:.88rem; margin-bottom:4px; align-items:center; }
+  .vote-bar-track { background:var(--surface); border-radius:4px; height:8px; overflow:hidden; }
+  .vote-bar-fill { height:100%; border-radius:4px; transition:width .6s ease; }
+
+  .reveal-row { display:flex; justify-content:space-between; align-items:center;
+    padding:11px 0; border-bottom:1px solid var(--border); font-size:.92rem; }
+  .reveal-row:last-child { border-bottom:none; }
+  .reveal-label { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.1em; }
+  .reveal-val { font-weight:500; }
+  .tag-impostor { background:rgba(230,57,70,.15); color:var(--accent); border:1px solid rgba(230,57,70,.3);
+    border-radius:20px; padding:2px 10px; font-size:.75rem; }
+
+  .section-title { font-size:.72rem; text-transform:uppercase; letter-spacing:.15em; color:var(--muted); margin:16px 0 8px; }
+  hr { border:none; border-top:1px solid var(--border); margin:14px 0; }
+
+  .waiting-msg { text-align:center; color:var(--muted); font-size:.9rem; padding:20px 0; }
+  .dot-anim::after { content:'...'; animation:dots 1.2s infinite; }
+  @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+
+  .conn-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .conn-dot.ok { background:var(--success); }
+  .conn-dot.err { background:var(--accent); }
+
+  .info-box { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:12px 16px; font-size:.85rem; color:var(--muted); line-height:1.6; margin-top:10px; }
+  .info-box strong { color:var(--text); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ LOGIN ══ -->
+  <div class="screen active" id="s-login">
+    <div class="logo">El Impostor</div>
+    <div class="logo-sub">Multijugador en red local</div>
+    <div class="card">
+      <div class="field">
+        <label>Tu nombre</label>
+        <input id="inp-nombre" type="text" placeholder="¿Cómo te llamas?" maxlength="20" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" onclick="unirse()">ENTRAR AL JUEGO</button>
+      <div class="info-box" style="margin-top:14px;">
+        <span id="conn-indicator"><span class="conn-dot err"></span>Conectando</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ LOBBY ══ -->
+  <div class="screen" id="s-lobby">
+    <div class="logo">El Impostor</div>
+    <div class="logo-sub">Sala de espera</div>
+    <div class="card">
+      <div class="section-title">Jugadores conectados</div>
+      <div class="player-list" id="lobby-players"></div>
+      <button class="btn btn-primary" id="btn-iniciar" onclick="iniciar()">INICIAR JUEGO</button>
+      <p style="color:var(--muted);font-size:.8rem;text-align:center;margin-top:8px;">Mínimo 3 jugadores para iniciar</p>
+    </div>
+  </div>
+
+  <!-- ══ PALABRA ══ -->
+  <div class="screen" id="s-palabra">
+    <div class="step-label">Tu palabra secreta</div>
+    <div class="step-title" id="palabra-titulo">—</div>
+    <div class="card">
+      <div id="palabra-cover" class="cover-box" onclick="verPalabra()">
+        <div style="font-size:2.2rem">👁️</div>
+        <div style="color:var(--muted);font-size:.88rem;margin-top:8px;">Toca para ver tu palabra</div>
+      </div>
+      <div id="palabra-reveal" class="word-box" style="display:none">
+        <div class="word-hint">TU ROL</div>
+        <div class="word-big" id="palabra-valor">—</div>
+        <div class="word-hint" id="palabra-extra"></div>
+      </div>
+      <button class="btn btn-success" id="btn-palabra-listo" onclick="palabraVista()" style="display:none">
+        ✓ YA LA MEMORICÉ
+      </button>
+      <div id="palabra-waiting" class="waiting-msg" style="display:none">
+        Esperando que los demás vean su palabra<span class="dot-anim"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PISTAS ══ -->
+  <div class="screen" id="s-pistas">
+    <div class="step-label">Ronda de pistas</div>
+    <div class="step-title">Da tu pista</div>
+    <div class="card">
+      <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px;">
+        Una sola pista sobre tu palabra. ¡Sin decirla directamente!
+      </p>
+      <div class="field">
+        <label>Tu pista</label>
+        <input id="inp-pista" type="text" placeholder="Escribe aquí…" maxlength="80" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" onclick="enviarPista()">ENVIAR PISTA</button>
+      <div id="pistas-progreso" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
+  <!-- ══ RESUMEN PISTAS ══ -->
+  <div class="screen" id="s-resumen">
+    <div class="step-label">Debate</div>
+    <div class="step-title">Pistas de todos</div>
+    <div class="card">
+      <div id="resumen-lista"></div>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="irAVotar()">VOTAR →</button>
+    </div>
+  </div>
+
+  <!-- ══ VOTACIÓN ══ -->
+  <div class="screen" id="s-votacion">
+    <div class="step-label">Votación</div>
+    <div class="step-title">¿Quién es el impostor?</div>
+    <div class="card">
+      <div id="vote-options"></div>
+      <button class="btn btn-primary" id="btn-votar" onclick="enviarVoto()">CONFIRMAR VOTO</button>
+      <div id="voto-waiting" class="waiting-msg" style="display:none">
+        Esperando votos de los demás<span class="dot-anim"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RESULTADO ══ -->
+  <div class="screen" id="s-resultado">
+    <div id="res-banner" class="result-banner">
+      <div class="result-emoji" id="res-emoji">🎉</div>
+      <div class="result-title" id="res-titulo">—</div>
+      <div class="result-sub" id="res-sub">—</div>
+    </div>
+    <div class="card">
+      <div class="section-title">Votos</div>
+      <div id="res-barras"></div>
+      <hr>
+      <div class="section-title">Revelación</div>
+      <div id="res-detalles"></div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="reiniciar()">JUGAR DE NUEVO</button>
+    </div>
+  </div>
+
+</div>
+<script>
+// ─── ESTADO LOCAL ──────────────────────────────────────────
+let miNombre = '';
+let miPalabra = null; // {esImpostor, palabraReal}
+let selectedVote = null;
+let pistaEnviada = false;
+let palabraVistaBool = false;
+let votoEnviado = false;
+let estadoActual = null;
+
+// ─── WEBSOCKET ─────────────────────────────────────────────
+const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+const ws = new WebSocket(`${wsProtocol}://${location.host}`);
+
+ws.addEventListener('open', () => {
+  document.getElementById('conn-indicator').innerHTML =
+    '<span class="conn-dot ok"></span>Servidor conectado';
+});
+ws.addEventListener('close', () => {
+  document.getElementById('conn-indicator').innerHTML =
+    '<span class="conn-dot err"></span>Desconectado — recarga la página';
+});
+ws.addEventListener('message', (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.tipo === 'bienvenido') { miNombre = msg.nombre; }
+  else if (msg.tipo === 'estado') { manejarEstado(msg); }
+  else if (msg.tipo === 'tuPalabra') { recibirPalabra(msg); }
+  else if (msg.tipo === 'resultado') { mostrarResultado(msg); }
+  else if (msg.tipo === 'error') { alert(msg.texto); }
+});
+
+function send(data) { ws.send(JSON.stringify(data)); }
+
+// ─── NAVEGACIÓN ────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ─── COLORES ───────────────────────────────────────────────
+const COLORS = ["#e63946","#f4a261","#2a9d8f","#457b9d","#a8dadc","#e9c46a","#8338ec","#fb5607"];
+function avatarStyle(i) { return `background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}`; }
+function ini(n) { return n.charAt(0).toUpperCase(); }
+
+// ─── ACCIONES ──────────────────────────────────────────────
+function unirse() {
+  const nombre = document.getElementById('inp-nombre').value.trim();
+  if (!nombre) return;
+  send({ tipo: 'unirse', nombre });
+}
+document.getElementById('inp-nombre').addEventListener('keydown', e => { if (e.key === 'Enter') unirse(); });
+
+function iniciar() { send({ tipo: 'iniciar' }); }
+
+function verPalabra() {
+  if (!miPalabra) return;
+  document.getElementById('palabra-cover').style.display = 'none';
+  document.getElementById('palabra-reveal').style.display = 'block';
+
+  if (miPalabra.esImpostor) {
+    document.getElementById('palabra-valor').textContent = '🕵️ IMPOSTOR';
+    document.getElementById('palabra-extra').textContent =
+      `La palabra de los demás es "${miPalabra.palabraReal}" — da una pista sin delatarte`;
+  } else {
+    document.getElementById('palabra-valor').textContent = miPalabra.palabraReal.toUpperCase();
+    document.getElementById('palabra-extra').textContent = '¡Recuérdala y no la digas directamente!';
+  }
+  document.getElementById('btn-palabra-listo').style.display = 'block';
+}
+
+function palabraVista() {
+  if (palabraVistaBool) return;
+  palabraVistaBool = true;
+  document.getElementById('btn-palabra-listo').style.display = 'none';
+  document.getElementById('palabra-waiting').style.display = 'block';
+  send({ tipo: 'palabraVista' });
+}
+
+function enviarPista() {
+  if (pistaEnviada) return;
+  const pista = document.getElementById('inp-pista').value.trim();
+  if (!pista) return;
+  pistaEnviada = true;
+  document.getElementById('inp-pista').disabled = true;
+  document.querySelector('#s-pistas .btn').disabled = true;
+  send({ tipo: 'pista', pista });
+}
+
+function irAVotar() { send({ tipo: 'irAVotar' }); }
+
+function seleccionarVoto(nombre) {
+  if (votoEnviado) return;
+  selectedVote = nombre;
+  document.querySelectorAll('.vote-option').forEach(el => el.classList.remove('selected'));
+  document.getElementById('vopt-' + CSS.escape(nombre))?.classList.add('selected');
+}
+
+function enviarVoto() {
+  if (!selectedVote || votoEnviado) return;
+  votoEnviado = true;
+  document.getElementById('btn-votar').style.display = 'none';
+  document.getElementById('voto-waiting').style.display = 'block';
+  send({ tipo: 'voto', votado: selectedVote });
+}
+
+function reiniciar() { send({ tipo: 'reiniciar' }); }
+
+// ─── RECIBIR PALABRA ───────────────────────────────────────
+function recibirPalabra(msg) {
+  miPalabra = msg;
+  palabraVistaBool = false;
+  document.getElementById('palabra-titulo').textContent = miNombre;
+  document.getElementById('palabra-cover').style.display = 'block';
+  document.getElementById('palabra-reveal').style.display = 'none';
+  document.getElementById('btn-palabra-listo').style.display = 'none';
+  document.getElementById('palabra-waiting').style.display = 'none';
+}
+
+// ─── MANEJAR ESTADO ────────────────────────────────────────
+function manejarEstado(estado) {
+  estadoActual = estado;
+  const { fase, jugadores, hints, votes } = estado;
+
+  if (fase === 'lobby') {
+    pistaEnviada = false; votoEnviado = false; selectedVote = null;
+    renderLobby(jugadores);
+    show('s-lobby');
+  }
+  else if (fase === 'palabras') {
+    renderLobby(jugadores); // actualiza progreso
+    if (!palabraVistaBool && miPalabra) {
+      show('s-palabra');
+    } else if (palabraVistaBool) {
+      document.getElementById('palabra-waiting').style.display = 'block';
+    }
+  }
+  else if (fase === 'pistas') {
+    renderProgresoPistas(jugadores, hints);
+    show('s-pistas');
+  }
+  else if (fase === 'resumen') {
+    renderResumen(jugadores, hints);
+    show('s-resumen');
+  }
+  else if (fase === 'votacion') {
+    if (!votoEnviado) renderVotacion(jugadores, votes);
+    show('s-votacion');
+  }
+  else if (fase === 'resultado') {
+    // resultado se maneja por mensaje separado
+  }
+}
+
+// ─── RENDER LOBBY ──────────────────────────────────────────
+function renderLobby(jugadores) {
+  document.getElementById('lobby-players').innerHTML = jugadores.map((j, i) => `
+    <div class="player-row">
+      <div class="avatar" style="${avatarStyle(i)}">${ini(j.nombre)}</div>
+      <span class="player-name">${j.nombre}</span>
+      ${j.nombre === miNombre ? '<span class="badge badge-tu">Tú</span>' : ''}
+    </div>`).join('');
+  document.getElementById('btn-iniciar').disabled = jugadores.length < 3;
+}
+
+// ─── RENDER PROGRESO PISTAS ────────────────────────────────
+function renderProgresoPistas(jugadores, hints) {
+  document.getElementById('pistas-progreso').innerHTML =
+    '<div class="section-title">Progreso</div>' +
+    jugadores.map((j, i) => `
+    <div class="hint-item">
+      <div class="avatar" style="${avatarStyle(i)}">${ini(j.nombre)}</div>
+      <div>
+        <div class="hint-name">${j.nombre}</div>
+        <div class="hint-text" style="color:var(--muted);font-size:.82rem">
+          ${hints[j.nombre] ? '✓ Pista enviada' : 'Escribiendo…'}
+        </div>
+      </div>
+      <div class="pending-dot ${hints[j.nombre] ? 'done' : ''}"></div>
+    </div>`).join('');
+}
+
+// ─── RENDER RESUMEN ────────────────────────────────────────
+function renderResumen(jugadores, hints) {
+  document.getElementById('resumen-lista').innerHTML = jugadores.map((j, i) => `
+    <div class="hint-item">
+      <div class="avatar" style="${avatarStyle(i)}">${ini(j.nombre)}</div>
+      <div>
+        <div class="hint-name">${j.nombre}</div>
+        <div class="hint-text">${hints[j.nombre] || '(sin pista)'}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── RENDER VOTACIÓN ───────────────────────────────────────
+function renderVotacion(jugadores, votes) {
+  const opciones = jugadores.filter(j => j.nombre !== miNombre);
+  document.getElementById('vote-options').innerHTML = opciones.map((j, i) => {
+    const idx = jugadores.findIndex(x => x.nombre === j.nombre);
+    return `
+    <div class="vote-option" id="vopt-${j.nombre}" onclick="seleccionarVoto('${j.nombre}')">
+      <div class="avatar" style="${avatarStyle(idx)}">${ini(j.nombre)}</div>
+      ${j.nombre}
+      ${votes[j.nombre] ? '<span class="badge badge-listo" style="margin-left:auto">votó ✓</span>' : ''}
+    </div>`;
+  }).join('');
+  document.getElementById('btn-votar').style.display = 'block';
+  document.getElementById('voto-waiting').style.display = 'none';
+}
+
+// ─── MOSTRAR RESULTADO ─────────────────────────────────────
+function mostrarResultado(msg) {
+  const { conteo, impostorReal, palabraReal, categoria, gano, expulsados } = msg;
+  const jugadores = estadoActual?.jugadores || [];
+
+  const banner = document.getElementById('res-banner');
+  banner.className = 'result-banner ' + (gano ? 'win' : 'lose');
+  document.getElementById('res-emoji').textContent = gano ? '🕵️' : '😈';
+  document.getElementById('res-titulo').textContent = gano ? '¡IMPOSTOR DESCUBIERTO!' : '¡EL IMPOSTOR GANÓ!';
+  document.getElementById('res-sub').textContent = gano
+    ? `Atraparon a ${impostorReal}`
+    : `${impostorReal} los engañó a todos`;
+
+  const maxV = Math.max(...Object.values(conteo));
+  document.getElementById('res-barras').innerHTML = jugadores
+    .sort((a, b) => (conteo[b.nombre]||0) - (conteo[a.nombre]||0))
+    .map((j, i) => {
+      const idx = jugadores.findIndex(x => x.nombre === j.nombre);
+      const v = conteo[j.nombre] || 0;
+      const pct = jugadores.length > 1 ? Math.round(v / jugadores.length * 100) : 0;
+      const isImp = j.nombre === impostorReal;
+      return `
+      <div class="vote-bar-row">
+        <div class="vote-bar-header">
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span class="avatar" style="${avatarStyle(idx)}">${ini(j.nombre)}</span>
+            ${j.nombre} ${isImp ? '<span class="tag-impostor">IMPOSTOR</span>' : ''}
+          </span>
+          <span style="color:var(--muted)">${v} voto${v!==1?'s':''}</span>
+        </div>
+        <div class="vote-bar-track">
+          <div class="vote-bar-fill" style="width:${pct}%;background:${isImp?'var(--accent)':'var(--success)'};"></div>
+        </div>
+      </div>`;
+    }).join('');
+
+  document.getElementById('res-detalles').innerHTML = `
+    <div class="reveal-row"><span class="reveal-label">Categoría</span><span class="reveal-val">${categoria}</span></div>
+    <div class="reveal-row"><span class="reveal-label">La palabra era</span><span class="reveal-val" style="color:var(--success)">${palabraReal.toUpperCase()}</span></div>
+    <div class="reveal-row"><span class="reveal-label">El impostor era</span><span class="reveal-val">${impostorReal}</span></div>`;
+
+  show('s-resultado');
+}
+</script>
+</body>
+</html>
