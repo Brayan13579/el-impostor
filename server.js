@@ -10,7 +10,6 @@ const wss = new WebSocket.Server({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── CATEGORÍAS ───────────────────────────────────────────
 const CATS = {
   "Animales domésticos":    { normal: ["perro","gato","conejo","hamster","loro","pez","tortuga"] },
   "Frutas dulces":          { normal: ["manzana","pera","durazno","ciruela","uva","fresa","melón"] },
@@ -22,21 +21,21 @@ const CATS = {
   "Instrumentos musicales": { normal: ["guitarra","piano","violín","batería","flauta","trompeta","saxofón"] },
 };
 
-// ─── ESTADO DEL JUEGO ─────────────────────────────────────
-let sala = {
-  fase: 'lobby',       // lobby | palabras | pistas | resumen | debate | votacion | resultado
-  jugadores: [],
-  asignaciones: {},
-  categoria: '',
-  hints: {},
-  votes: {},
-  debateVotos: {},     // {nombre: 'votar' | 'otra_ronda'}
-  wordTurno: 0,
-  voteTurno: 0,
-  rondaPistas: 1,
-};
+function estadoVacio() {
+  return {
+    fase: 'lobby',
+    jugadores: [],
+    asignaciones: {},
+    categoria: '',
+    hints: {},
+    votes: {},
+    debateVotos: {},
+    rondaPistas: 1,
+  };
+}
 
-const clients = new Map();
+let sala = estadoVacio();
+const clients = new Map(); // ws -> nombre
 
 function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -62,8 +61,6 @@ function broadcastEstado() {
     hints: sala.hints,
     votes: sala.votes,
     debateVotos: sala.debateVotos,
-    wordTurno: sala.wordTurno,
-    voteTurno: sala.voteTurno,
     categoria: sala.categoria,
     rondaPistas: sala.rondaPistas,
   });
@@ -71,8 +68,7 @@ function broadcastEstado() {
 
 function iniciarJuego() {
   const nombres = sala.jugadores.map(j => j.nombre);
-  const cats = Object.keys(CATS);
-  sala.categoria = rand(cats);
+  sala.categoria = rand(Object.keys(CATS));
   const palabraReal = rand(CATS[sala.categoria].normal);
   const impostorIdx = Math.floor(Math.random() * nombres.length);
 
@@ -84,11 +80,12 @@ function iniciarJuego() {
   sala.hints = {};
   sala.votes = {};
   sala.debateVotos = {};
-  sala.wordTurno = 0;
-  sala.voteTurno = 0;
   sala.rondaPistas = 1;
-  sala.jugadores.forEach(j => { j.listo = false; j.palabraMostrada = false; });
+  sala.jugadores.forEach(j => { j.listo = false; });
   sala.fase = 'palabras';
+
+  // Notificar a cada cliente que se reinician sus flags locales
+  broadcast({ tipo: 'resetLocal' });
   broadcastEstado();
 
   nombres.forEach(n => {
@@ -99,8 +96,11 @@ function iniciarJuego() {
 
 function verificarTodasPalabras() {
   if (sala.jugadores.every(j => j.listo)) {
+    sala.hints = {};
     sala.fase = 'pistas';
     sala.jugadores.forEach(j => j.listo = false);
+    // Notificar reset de pistas al cliente
+    broadcast({ tipo: 'resetPistas' });
     broadcastEstado();
   }
 }
@@ -115,56 +115,67 @@ function verificarTodasPistas() {
 
 function verificarDebateVotos() {
   const nombres = sala.jugadores.map(j => j.nombre);
-  if (!nombres.every(n => sala.debateVotos[n])) return; // no han votado todos
+  if (!nombres.every(n => sala.debateVotos[n])) return;
 
-  const votarYa    = nombres.filter(n => sala.debateVotos[n] === 'votar').length;
-  const otraRonda  = nombres.filter(n => sala.debateVotos[n] === 'otra_ronda').length;
+  const votarYa   = nombres.filter(n => sala.debateVotos[n] === 'votar').length;
+  const otraRonda = nombres.filter(n => sala.debateVotos[n] === 'otra_ronda').length;
 
   if (votarYa > otraRonda) {
-    // Mayoría quiere votar
     sala.fase = 'votacion';
     sala.votes = {};
+    // Notificar reset de votos
+    broadcast({ tipo: 'resetVotos' });
     broadcastEstado();
   } else {
-    // Mayoría quiere otra ronda de pistas
     sala.rondaPistas += 1;
     sala.debateVotos = {};
-    // Limpiar solo las pistas de esta ronda para que todos puedan dar una nueva
     sala.hints = {};
     sala.fase = 'pistas';
+    // Notificar reset de pistas y debate
+    broadcast({ tipo: 'resetPistas' });
     broadcastEstado();
   }
 }
 
 function verificarTodosVotos() {
   const nombres = sala.jugadores.map(j => j.nombre);
-  if (nombres.every(n => sala.votes[n])) {
-    sala.fase = 'resultado';
+  if (!nombres.every(n => sala.votes[n])) return;
 
-    const conteo = {};
-    nombres.forEach(n => { conteo[n] = 0; });
-    Object.values(sala.votes).forEach(v => { conteo[v] = (conteo[v] || 0) + 1; });
-    const maxV = Math.max(...Object.values(conteo));
-    const expulsados = nombres.filter(n => conteo[n] === maxV);
-    const impostorReal = nombres.find(n => sala.asignaciones[n].esImpostor);
-    const gano = expulsados.includes(impostorReal);
+  sala.fase = 'resultado';
+  const conteo = {};
+  nombres.forEach(n => { conteo[n] = 0; });
+  Object.values(sala.votes).forEach(v => { conteo[v] = (conteo[v] || 0) + 1; });
+  const maxV = Math.max(...Object.values(conteo));
+  const expulsados = nombres.filter(n => conteo[n] === maxV);
+  const impostorReal = nombres.find(n => sala.asignaciones[n].esImpostor);
+  const gano = expulsados.includes(impostorReal);
 
-    broadcast({
-      tipo: 'resultado',
-      conteo,
-      impostorReal,
-      palabraReal: sala.asignaciones[impostorReal].palabraReal,
-      categoria: sala.categoria,
-      gano,
-      expulsados,
-    });
-
-    broadcastEstado();
-  }
+  broadcast({
+    tipo: 'resultado',
+    conteo,
+    impostorReal,
+    palabraReal: sala.asignaciones[impostorReal].palabraReal,
+    categoria: sala.categoria,
+    gano,
+    expulsados,
+  });
+  broadcastEstado();
 }
 
 // ─── WEBSOCKET ────────────────────────────────────────────
 wss.on('connection', (ws) => {
+  // Cuando alguien se conecta, mandarle el estado actual
+  ws.send(JSON.stringify({
+    tipo: 'estado',
+    fase: sala.fase,
+    jugadores: sala.jugadores.map(j => ({ nombre: j.nombre, listo: j.listo })),
+    hints: sala.hints,
+    votes: sala.votes,
+    debateVotos: sala.debateVotos,
+    categoria: sala.categoria,
+    rondaPistas: sala.rondaPistas,
+  }));
+
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
@@ -176,8 +187,13 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ tipo: 'error', texto: 'Ese nombre ya está en uso.' }));
         return;
       }
+      // Solo se puede unir en lobby
+      if (sala.fase !== 'lobby') {
+        ws.send(JSON.stringify({ tipo: 'error', texto: 'El juego ya está en curso.' }));
+        return;
+      }
       clients.set(ws, nombre);
-      sala.jugadores.push({ nombre, listo: false, palabraMostrada: false });
+      sala.jugadores.push({ nombre, listo: false });
       ws.send(JSON.stringify({ tipo: 'bienvenido', nombre }));
       broadcastEstado();
     }
@@ -193,39 +209,46 @@ wss.on('connection', (ws) => {
     else if (msg.tipo === 'palabraVista') {
       const nombre = clients.get(ws);
       const jugador = sala.jugadores.find(j => j.nombre === nombre);
-      if (jugador) { jugador.listo = true; jugador.palabraMostrada = true; }
-      verificarTodasPalabras();
-      broadcastEstado();
+      if (jugador && !jugador.listo) {
+        jugador.listo = true;
+        verificarTodasPalabras();
+        broadcastEstado();
+      }
     }
 
     else if (msg.tipo === 'pista') {
       const nombre = clients.get(ws);
-      if (nombre && msg.pista?.trim()) {
+      if (nombre && msg.pista?.trim() && !sala.hints[nombre]) {
         sala.hints[nombre] = msg.pista.trim().slice(0, 80);
         verificarTodasPistas();
         broadcastEstado();
       }
     }
 
+    else if (msg.tipo === 'irAVotar') {
+      if (sala.fase === 'resumen') {
+        sala.fase = 'debate';
+        sala.debateVotos = {};
+        broadcast({ tipo: 'resetDebate' });
+        broadcastEstado();
+      }
+    }
+
     else if (msg.tipo === 'debateVoto') {
       const nombre = clients.get(ws);
-      if (nombre && (msg.eleccion === 'votar' || msg.eleccion === 'otra_ronda')) {
+      if (nombre && !sala.debateVotos[nombre] &&
+          (msg.eleccion === 'votar' || msg.eleccion === 'otra_ronda')) {
         sala.debateVotos[nombre] = msg.eleccion;
         verificarDebateVotos();
         broadcastEstado();
       }
     }
 
-    else if (msg.tipo === 'irAVotar') {
-      sala.fase = 'debate';
-      sala.debateVotos = {};
-      broadcastEstado();
-    }
-
     else if (msg.tipo === 'voto') {
       const nombre = clients.get(ws);
       const votado = msg.votado;
-      if (nombre && votado && sala.jugadores.find(j => j.nombre === votado) && votado !== nombre) {
+      if (nombre && votado && !sala.votes[nombre] &&
+          sala.jugadores.find(j => j.nombre === votado) && votado !== nombre) {
         sala.votes[nombre] = votado;
         verificarTodosVotos();
         broadcastEstado();
@@ -233,9 +256,13 @@ wss.on('connection', (ws) => {
     }
 
     else if (msg.tipo === 'reiniciar') {
-      sala.jugadores.forEach(j => { j.listo = false; j.palabraMostrada = false; });
-      sala.fase = 'lobby';
-      sala.hints = {}; sala.votes = {}; sala.asignaciones = {}; sala.debateVotos = {};
+      // Guardar jugadores conectados y resetear todo
+      const nombresActuales = [...clients.values()];
+      sala = estadoVacio();
+      nombresActuales.forEach(n => {
+        sala.jugadores.push({ nombre: n, listo: false });
+      });
+      broadcast({ tipo: 'resetLocal' });
       broadcastEstado();
     }
   });
@@ -250,7 +277,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-// ─── IP LOCAL ─────────────────────────────────────────────
 function getLocalIP() {
   const ifaces = os.networkInterfaces();
   for (const name of Object.keys(ifaces)) {
@@ -264,11 +290,7 @@ function getLocalIP() {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIP();
-  console.log('\n╔══════════════════════════════════════╗');
-  console.log('║      🕵️  EL IMPOSTOR — SERVIDOR       ║');
-  console.log('╠══════════════════════════════════════╣');
-  console.log(`║  Puerto: ${PORT}`);
-  console.log(`║  Local:  http://localhost:${PORT}`);
-  console.log(`║  WiFi:   http://${ip}:${PORT}`);
-  console.log('╚══════════════════════════════════════╝\n');
+  console.log(`\n🕵️  El Impostor corriendo en puerto ${PORT}`);
+  console.log(`   Local:  http://localhost:${PORT}`);
+  console.log(`   WiFi:   http://${ip}:${PORT}\n`);
 });
