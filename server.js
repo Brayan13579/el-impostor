@@ -10,15 +10,117 @@ const wss = new WebSocket.Server({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Cada palabra tiene su pista para el impostor — relacionada pero no obvia
 const CATS = {
-  "Animales domésticos":    { normal: ["perro","gato","conejo","hamster","loro","pez","tortuga"] },
-  "Frutas dulces":          { normal: ["manzana","pera","durazno","ciruela","uva","fresa","melón"] },
-  "Países de Sudamérica":   { normal: ["Colombia","Argentina","Chile","Perú","Uruguay","Ecuador","Bolivia"] },
-  "Deportes de equipo":     { normal: ["fútbol","baloncesto","béisbol","voleibol","rugby","hockey","waterpolo"] },
-  "Comidas rápidas":        { normal: ["pizza","hamburguesa","hotdog","tacos","sandwich","nuggets","papas fritas"] },
-  "Colores básicos":        { normal: ["rojo","azul","verde","amarillo","naranja","morado","rosado"] },
-  "Profesiones comunes":    { normal: ["médico","maestro","ingeniero","abogado","enfermero","contador","arquitecto"] },
-  "Instrumentos musicales": { normal: ["guitarra","piano","violín","batería","flauta","trompeta","saxofón"] },
+  "Animales domésticos": {
+    palabras: [
+      { palabra: "perro",    pista: "leal" },
+      { palabra: "gato",     pista: "independiente" },
+      { palabra: "conejo",   pista: "orejas largas" },
+      { palabra: "hamster",  pista: "rueda giratoria" },
+      { palabra: "loro",     pista: "habla" },
+      { palabra: "pez",      pista: "acuático" },
+      { palabra: "tortuga",  pista: "caparazón" },
+    ]
+  },
+  "Frutas": {
+    palabras: [
+      { palabra: "manzana",  pista: "roja o verde" },
+      { palabra: "pera",     pista: "forma de lágrima" },
+      { palabra: "durazno",  pista: "peluda por fuera" },
+      { palabra: "uva",      pista: "en racimos" },
+      { palabra: "fresa",    pista: "roja con puntitos" },
+      { palabra: "melón",    pista: "verde por fuera" },
+      { palabra: "sandía",   pista: "verde con rayas" },
+      { palabra: "mango",    pista: "tropical amarillo" },
+      { palabra: "piña",     pista: "corona de hojas" },
+      { palabra: "kiwi",     pista: "verde por dentro" },
+    ]
+  },
+  "Países": {
+    palabras: [
+      { palabra: "Colombia",  pista: "café famoso" },
+      { palabra: "Argentina", pista: "tango y asado" },
+      { palabra: "Chile",     pista: "largo y angosto" },
+      { palabra: "Perú",      pista: "Machu Picchu" },
+      { palabra: "Brasil",    pista: "carnaval" },
+      { palabra: "México",    pista: "tacos y mariachi" },
+      { palabra: "España",    pista: "flamenco" },
+      { palabra: "Francia",   pista: "torre famosa" },
+      { palabra: "Japón",     pista: "sushi y samurái" },
+      { palabra: "Italia",    pista: "pizza y pasta" },
+    ]
+  },
+  "Deportes": {
+    palabras: [
+      { palabra: "fútbol",      pista: "once jugadores" },
+      { palabra: "baloncesto",  pista: "canasta arriba" },
+      { palabra: "tenis",       pista: "raqueta y red" },
+      { palabra: "natación",    pista: "en el agua" },
+      { palabra: "béisbol",     pista: "bate y guante" },
+      { palabra: "voleibol",    pista: "seis por lado" },
+      { palabra: "ciclismo",    pista: "dos ruedas" },
+      { palabra: "boxeo",       pista: "guantes y ring" },
+      { palabra: "golf",        pista: "hoyo en uno" },
+      { palabra: "rugby",       pista: "balón ovalado" },
+    ]
+  },
+  "Comidas": {
+    palabras: [
+      { palabra: "pizza",        pista: "queso derretido" },
+      { palabra: "hamburguesa",  pista: "entre dos panes" },
+      { palabra: "sushi",        pista: "arroz enrollado" },
+      { palabra: "tacos",        pista: "tortilla doblada" },
+      { palabra: "pasta",        pista: "italiana al dente" },
+      { palabra: "arepa",        pista: "maíz aplastado" },
+      { palabra: "empanada",     pista: "rellena y frita" },
+      { palabra: "hotdog",       pista: "salchicha en pan" },
+      { palabra: "sopa",         pista: "caldo caliente" },
+      { palabra: "ceviche",      pista: "limón y pescado" },
+    ]
+  },
+  "Profesiones": {
+    palabras: [
+      { palabra: "médico",      pista: "bata blanca" },
+      { palabra: "maestro",     pista: "tablero y tiza" },
+      { palabra: "ingeniero",   pista: "planos y cálculos" },
+      { palabra: "abogado",     pista: "toga y ley" },
+      { palabra: "chef",        pista: "gorro alto blanco" },
+      { palabra: "bombero",     pista: "apaga incendios" },
+      { palabra: "policía",     pista: "uniforme y placa" },
+      { palabra: "piloto",      pista: "cabina y altitud" },
+      { palabra: "actor",       pista: "escenario y cámara" },
+      { palabra: "arquitecto",  pista: "diseña edificios" },
+    ]
+  },
+  "Lugares": {
+    palabras: [
+      { palabra: "playa",       pista: "arena y olas" },
+      { palabra: "montaña",     pista: "cima con nieve" },
+      { palabra: "museo",       pista: "arte e historia" },
+      { palabra: "aeropuerto",  pista: "maletas y vuelos" },
+      { palabra: "hospital",    pista: "urgencias y médicos" },
+      { palabra: "estadio",     pista: "gradas y cancha" },
+      { palabra: "biblioteca",  pista: "silencio y libros" },
+      { palabra: "mercado",     pista: "vendedores y frutas" },
+      { palabra: "parque",      pista: "árboles y bancas" },
+      { palabra: "restaurante", pista: "menú y mesero" },
+    ]
+  },
+  "Instrumentos musicales": {
+    palabras: [
+      { palabra: "guitarra",   pista: "seis cuerdas" },
+      { palabra: "piano",      pista: "teclas blancas y negras" },
+      { palabra: "violín",     pista: "arco y cuerda" },
+      { palabra: "batería",    pista: "parches y platillos" },
+      { palabra: "flauta",     pista: "sopla por el lado" },
+      { palabra: "trompeta",   pista: "metal y pistones" },
+      { palabra: "saxofón",    pista: "jazz y viento" },
+      { palabra: "arpa",       pista: "cuerdas verticales" },
+      { palabra: "acordeón",   pista: "fuelle y botones" },
+      { palabra: "maracas",    pista: "agita y suena" },
+    ]
+  },
 };
 
 function estadoVacio() {
@@ -69,12 +171,18 @@ function broadcastEstado() {
 function iniciarJuego() {
   const nombres = sala.jugadores.map(j => j.nombre);
   sala.categoria = rand(Object.keys(CATS));
-  const palabraReal = rand(CATS[sala.categoria].normal);
+  const entrada = rand(CATS[sala.categoria].palabras);
+  const palabraReal = entrada.palabra;
+  const pistaImpostor = entrada.pista;
   const impostorIdx = Math.floor(Math.random() * nombres.length);
 
   sala.asignaciones = {};
   nombres.forEach((n, i) => {
-    sala.asignaciones[n] = { esImpostor: i === impostorIdx, palabraReal };
+    sala.asignaciones[n] = {
+      esImpostor: i === impostorIdx,
+      palabraReal,
+      pistaImpostor,
+    };
   });
 
   sala.hints = {};
@@ -90,7 +198,7 @@ function iniciarJuego() {
 
   nombres.forEach(n => {
     const d = sala.asignaciones[n];
-    sendTo(n, { tipo: 'tuPalabra', esImpostor: d.esImpostor, palabraReal: d.palabraReal });
+    sendTo(n, { tipo: 'tuPalabra', esImpostor: d.esImpostor, palabraReal: d.palabraReal, pistaImpostor: d.pistaImpostor });
   });
 }
 
