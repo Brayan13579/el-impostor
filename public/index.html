@@ -143,6 +143,7 @@
         <div class="word-big" id="palabra-valor">—</div>
         <div class="word-hint" id="palabra-extra"></div>
       </div>
+      <button class="btn btn-secondary" id="btn-ocultar-palabra" onclick="ocultarPalabra()" style="display:none">🙈 OCULTAR PALABRA</button>
       <button class="btn btn-success" id="btn-palabra-listo" onclick="palabraVista()" style="display:none">✓ YA LA MEMORICÉ</button>
       <div id="palabra-waiting" class="waiting-msg" style="display:none">
         Esperando que los demás vean su palabra<span class="dot-anim"></span>
@@ -150,25 +151,25 @@
     </div>
   </div>
 
-  <!-- PISTAS -->
+  <!-- PALABRAS RONDA -->
   <div class="screen" id="s-pistas">
-    <div class="step-label">Ronda de pistas</div>
-    <div class="step-title" id="pistas-titulo">Da tu pista</div>
+    <div class="step-label">Ronda de palabras</div>
+    <div class="step-title" id="pistas-titulo">Da tu palabra</div>
     <div class="card">
-      <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px;">Una sola pista sobre tu palabra. ¡Sin decirla directamente!</p>
+      <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px;">Cada uno dice una palabra relacionada con la suya. ¡Sin decirla directamente!</p>
       <div class="field">
-        <label>Tu pista</label>
+        <label>Tu palabra</label>
         <input id="inp-pista" type="text" placeholder="Escribe aquí…" maxlength="80" autocomplete="off">
       </div>
-      <button class="btn btn-primary" id="btn-enviar-pista" onclick="enviarPista()">ENVIAR PISTA</button>
+      <button class="btn btn-primary" id="btn-enviar-pista" onclick="enviarPista()">ENVIAR PALABRA</button>
       <div id="pistas-progreso" style="margin-top:16px;"></div>
     </div>
   </div>
 
-  <!-- RESUMEN PISTAS -->
+  <!-- RESUMEN -->
   <div class="screen" id="s-resumen">
     <div class="step-label">Debate</div>
-    <div class="step-title">Pistas de todos</div>
+    <div class="step-title">Palabras de todos</div>
     <div class="card">
       <div id="resumen-lista"></div>
       <button class="btn btn-primary" style="margin-top:10px;" onclick="irAVotar()">¿VOTAR O NUEVA RONDA? →</button>
@@ -180,10 +181,10 @@
     <div class="step-label">Decisión grupal</div>
     <div class="step-title">¿Listos para votar?</div>
     <div class="card">
-      <p style="color:var(--muted);font-size:.88rem;margin-bottom:18px;">Voten si quieren pasar a la votación o dar otra ronda de pistas. La mayoría decide.</p>
+      <p style="color:var(--muted);font-size:.88rem;margin-bottom:18px;">Voten si quieren pasar a la votación o dar otra ronda de palabras. La mayoría decide.</p>
       <div id="debate-mi-voto">
         <button class="btn btn-primary" onclick="votarDebate('votar')">🗳️ YA PODEMOS VOTAR</button>
-        <button class="btn btn-secondary" onclick="votarDebate('otra_ronda')">💬 QUIERO OTRA RONDA DE PISTAS</button>
+        <button class="btn btn-secondary" onclick="votarDebate('otra_ronda')">💬 QUIERO OTRA RONDA DE PALABRAS</button>
       </div>
       <div id="debate-enviado" style="display:none" class="waiting-msg">
         Tu voto fue registrado, esperando a los demás<span class="dot-anim"></span>
@@ -311,18 +312,29 @@ function verPalabra() {
   document.getElementById('palabra-reveal').style.display = 'block';
   if (miPalabra.esImpostor) {
     document.getElementById('palabra-valor').textContent = '🕵️ IMPOSTOR';
-    document.getElementById('palabra-extra').textContent = `La palabra de los demás es "${miPalabra.palabraReal}" — da una pista sin delatarte`;
+    document.getElementById('palabra-extra').textContent = `Tu pista: "${miPalabra.pistaImpostor}"`;
   } else {
     document.getElementById('palabra-valor').textContent = miPalabra.palabraReal.toUpperCase();
     document.getElementById('palabra-extra').textContent = '¡Recuérdala y no la digas directamente!';
   }
+  document.getElementById('btn-ocultar-palabra').style.display = 'block';
   document.getElementById('btn-palabra-listo').style.display = 'block';
+}
+
+function ocultarPalabra() {
+  document.getElementById('palabra-cover').style.display = 'block';
+  document.getElementById('palabra-reveal').style.display = 'none';
+  document.getElementById('btn-ocultar-palabra').style.display = 'none';
+  document.getElementById('btn-palabra-listo').style.display = 'none';
 }
 
 function palabraVista() {
   if (palabraVistaBool) return;
   palabraVistaBool = true;
+  document.getElementById('btn-ocultar-palabra').style.display = 'none';
   document.getElementById('btn-palabra-listo').style.display = 'none';
+  document.getElementById('palabra-reveal').style.display = 'none';
+  document.getElementById('palabra-cover').style.display = 'none';
   document.getElementById('palabra-waiting').style.display = 'block';
   send({ tipo: 'palabraVista' });
 }
@@ -374,6 +386,7 @@ function recibirPalabra(msg) {
   document.getElementById('palabra-titulo').textContent = miNombre;
   document.getElementById('palabra-cover').style.display = 'block';
   document.getElementById('palabra-reveal').style.display = 'none';
+  document.getElementById('btn-ocultar-palabra').style.display = 'none';
   document.getElementById('btn-palabra-listo').style.display = 'none';
   document.getElementById('palabra-waiting').style.display = 'none';
   show('s-palabra');
@@ -398,7 +411,7 @@ function manejarEstado(estado) {
   }
   else if (fase === 'pistas') {
     document.getElementById('pistas-titulo').textContent =
-      rondaPistas > 1 ? `Ronda ${rondaPistas} de pistas` : 'Da tu pista';
+      rondaPistas > 1 ? `Ronda ${rondaPistas} de palabras` : 'Da tu palabra';
     renderProgresoPistas(jugadores, hints);
     show('s-pistas');
   }
@@ -436,7 +449,7 @@ function renderProgresoPistas(jugadores, hints) {
       <div class="avatar" style="${avatarStyle(i)}">${ini(j.nombre)}</div>
       <div>
         <div class="hint-name">${j.nombre}</div>
-        <div class="hint-text" style="color:var(--muted);font-size:.82rem">${hints[j.nombre] ? '✓ Pista enviada' : 'Escribiendo…'}</div>
+        <div class="hint-text" style="color:var(--muted);font-size:.82rem">${hints[j.nombre] ? '✓ Palabra enviada' : 'Pensando…'}</div>
       </div>
       <div class="pending-dot ${hints[j.nombre] ? 'done' : ''}"></div>
     </div>`).join('');
@@ -460,7 +473,7 @@ function renderDebate(jugadores, debateVotos) {
   document.getElementById('debate-progreso').innerHTML =
     jugadores.map((j, i) => {
       const v = debateVotos[j.nombre];
-      const etiqueta = v === 'votar' ? '🗳️ Votar ya' : v === 'otra_ronda' ? '💬 Otra ronda' : '…';
+      const etiqueta = v === 'votar' ? '🗳️ Votar ya' : v === 'otra_ronda' ? '💬 Otra ronda de palabras' : '…';
       const color = v === 'votar' ? 'var(--accent)' : v === 'otra_ronda' ? 'var(--success)' : 'var(--muted)';
       return `
       <div class="hint-item">
