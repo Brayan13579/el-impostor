@@ -260,12 +260,42 @@
 <script>
 // ─── ESTADO LOCAL ──────────────────────────────────────────
 let miNombre = '';
-let miPalabra = null; // {esImpostor, palabraReal}
+let miPalabra = null;
 let selectedVote = null;
 let pistaEnviada = false;
 let palabraVistaBool = false;
 let votoEnviado = false;
+let debateVotado = false;
 let estadoActual = null;
+
+function resetearFlags() {
+  pistaEnviada = false;
+  palabraVistaBool = false;
+  votoEnviado = false;
+  debateVotado = false;
+  selectedVote = null;
+  miPalabra = null;
+}
+
+function resetearPistas() {
+  pistaEnviada = false;
+  document.getElementById('inp-pista').disabled = false;
+  document.getElementById('inp-pista').value = '';
+  document.querySelector('#s-pistas .btn-primary').disabled = false;
+}
+
+function resetearDebate() {
+  debateVotado = false;
+  document.getElementById('debate-mi-voto').style.display = 'block';
+  document.getElementById('debate-enviado').style.display = 'none';
+}
+
+function resetearVotos() {
+  votoEnviado = false;
+  selectedVote = null;
+  document.getElementById('btn-votar').style.display = 'block';
+  document.getElementById('voto-waiting').style.display = 'none';
+}
 
 // ─── WEBSOCKET ─────────────────────────────────────────────
 const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -281,11 +311,15 @@ ws.addEventListener('close', () => {
 });
 ws.addEventListener('message', (e) => {
   const msg = JSON.parse(e.data);
-  if (msg.tipo === 'bienvenido') { miNombre = msg.nombre; }
-  else if (msg.tipo === 'estado') { manejarEstado(msg); }
-  else if (msg.tipo === 'tuPalabra') { recibirPalabra(msg); }
-  else if (msg.tipo === 'resultado') { mostrarResultado(msg); }
-  else if (msg.tipo === 'error') { alert(msg.texto); }
+  if      (msg.tipo === 'bienvenido')  { miNombre = msg.nombre; }
+  else if (msg.tipo === 'estado')      { manejarEstado(msg); }
+  else if (msg.tipo === 'tuPalabra')   { recibirPalabra(msg); }
+  else if (msg.tipo === 'resultado')   { mostrarResultado(msg); }
+  else if (msg.tipo === 'resetLocal')  { resetearFlags(); }
+  else if (msg.tipo === 'resetPistas') { resetearPistas(); resetearDebate(); }
+  else if (msg.tipo === 'resetDebate') { resetearDebate(); }
+  else if (msg.tipo === 'resetVotos')  { resetearVotos(); }
+  else if (msg.tipo === 'error')       { alert(msg.texto); }
 });
 
 function send(data) { ws.send(JSON.stringify(data)); }
@@ -373,7 +407,7 @@ function enviarVoto() {
   send({ tipo: 'voto', votado: selectedVote });
 }
 
-function reiniciar() { send({ tipo: 'reiniciar' }); }
+function reiniciar() { send({ tipo: 'reiniciar' }); show('s-lobby'); }
 
 // ─── RECIBIR PALABRA ───────────────────────────────────────
 function recibirPalabra(msg) {
@@ -384,6 +418,7 @@ function recibirPalabra(msg) {
   document.getElementById('palabra-reveal').style.display = 'none';
   document.getElementById('btn-palabra-listo').style.display = 'none';
   document.getElementById('palabra-waiting').style.display = 'none';
+  show('s-palabra');
 }
 
 // ─── MANEJAR ESTADO ────────────────────────────────────────
@@ -392,27 +427,21 @@ function manejarEstado(estado) {
   const { fase, jugadores, hints, votes, debateVotos, rondaPistas } = estado;
 
   if (fase === 'lobby') {
-    pistaEnviada = false; votoEnviado = false; selectedVote = null; debateVotado = false;
     renderLobby(jugadores);
-    show('s-lobby');
+    // Solo ir al login si aún no tenemos nombre
+    if (!miNombre) show('s-login');
+    else show('s-lobby');
   }
   else if (fase === 'palabras') {
-    renderLobby(jugadores);
-    if (!palabraVistaBool && miPalabra) {
-      show('s-palabra');
-    } else if (palabraVistaBool) {
+    if (miPalabra && !palabraVistaBool) show('s-palabra');
+    else if (miPalabra && palabraVistaBool) {
       document.getElementById('palabra-waiting').style.display = 'block';
+      show('s-palabra');
     }
+    // Si no tenemos palabra aún, esperamos el mensaje tuPalabra
   }
   else if (fase === 'pistas') {
-    // Si volvemos a pistas por nueva ronda, resetear estado local
-    if (pistaEnviada && !hints[miNombre]) {
-      pistaEnviada = false;
-      document.getElementById('inp-pista').disabled = false;
-      document.getElementById('inp-pista').value = '';
-      document.querySelector('#s-pistas .btn').disabled = false;
-    }
-    document.querySelector('#s-pistas .step-title').textContent =
+    document.querySelector('.step-title', '#s-pistas').textContent =
       rondaPistas > 1 ? `Ronda ${rondaPistas} de pistas` : 'Da tu pista';
     renderProgresoPistas(jugadores, hints);
     show('s-pistas');
@@ -430,7 +459,7 @@ function manejarEstado(estado) {
     show('s-votacion');
   }
   else if (fase === 'resultado') {
-    // resultado se maneja por mensaje separado
+    // se maneja por mensaje 'resultado'
   }
 }
 
